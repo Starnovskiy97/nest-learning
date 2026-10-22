@@ -95,7 +95,16 @@ describe('Users (e2e)', () => {
     app = await startApp();
 
     await request(app.getHttpServer()).get('/tasks/1').expect(200).expect(task);
-    await request(app.getHttpServer()).get('/tasks').expect(200).expect([task]);
+    await request(app.getHttpServer())
+      .get('/tasks')
+      .expect(200)
+      .expect({
+        items: [task],
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
     await request(app.getHttpServer())
       .delete('/tasks/1')
       .expect(204)
@@ -105,7 +114,13 @@ describe('Users (e2e)', () => {
     app = await startApp();
 
     await request(app.getHttpServer()).get('/tasks/1').expect(404);
-    await request(app.getHttpServer()).get('/tasks').expect(200).expect([]);
+    await request(app.getHttpServer()).get('/tasks').expect(200).expect({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0,
+    });
     await request(app.getHttpServer())
       .get('/users/1')
       .expect(200)
@@ -119,7 +134,13 @@ describe('Users (e2e)', () => {
       }),
     ).rejects.toMatchObject({ code: 'P2003' });
 
-    await request(app.getHttpServer()).get('/tasks').expect(200).expect([]);
+    await request(app.getHttpServer()).get('/tasks').expect(200).expect({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0,
+    });
   });
 
   it('creates users with distinct ids and retrieves them', async () => {

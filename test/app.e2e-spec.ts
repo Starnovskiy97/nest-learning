@@ -46,7 +46,13 @@ describe('AppController (e2e)', () => {
   });
 
   it('/tasks (GET)', () => {
-    return request(app.getHttpServer()).get('/tasks').expect(200).expect([]);
+    return request(app.getHttpServer()).get('/tasks').expect(200).expect({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0,
+    });
   });
 
   it('creates tasks and returns them in the list', async () => {
@@ -78,7 +84,13 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .get('/tasks')
       .expect(200)
-      .expect([firstTask, secondTask]);
+      .expect({
+        items: [firstTask, secondTask],
+        total: 2,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
   });
 
   it('returns a task by id', async () => {
@@ -216,7 +228,13 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .get('/tasks')
       .expect(200)
-      .expect([remainingTask]);
+      .expect({
+        items: [remainingTask],
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
   });
 
   it('returns 404 when deleting a missing task', () => {
@@ -238,7 +256,13 @@ describe('AppController (e2e)', () => {
   ])('rejects invalid task creation: %j', async (body) => {
     await request(app.getHttpServer()).post('/tasks').send(body).expect(400);
 
-    await request(app.getHttpServer()).get('/tasks').expect(200).expect([]);
+    await request(app.getHttpServer()).get('/tasks').expect(200).expect({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0,
+    });
   });
 
   it.each([
@@ -296,7 +320,13 @@ describe('AppController (e2e)', () => {
       .get('/tasks')
       .query(query)
       .expect(200)
-      .expect(tasks.filter((task) => ids.includes(task.id)));
+      .expect({
+        items: tasks.filter((task) => ids.includes(task.id)),
+        total: ids.length,
+        page: 1,
+        limit: 10,
+        totalPages: ids.length === 0 ? 0 : 1,
+      });
   });
 
   it.each([
@@ -316,6 +346,99 @@ describe('AppController (e2e)', () => {
     'assigneeId=1&assigneeId=2',
     'unexpected=value',
   ])('rejects invalid task filters: %s', (query) => {
+    return request(app.getHttpServer()).get(`/tasks?${query}`).expect(400);
+  });
+
+  it.each([
+    { page: 1, limit: 2, ids: [1, 2], total: 5, totalPages: 3 },
+    { page: 2, limit: 2, ids: [3, 4], total: 5, totalPages: 3 },
+    { page: 3, limit: 2, ids: [5], total: 5, totalPages: 3 },
+    { page: 4, limit: 2, ids: [], total: 5, totalPages: 3 },
+    {
+      page: 2,
+      limit: 1,
+      completed: 'false',
+      assigneeId: '1',
+      ids: [3],
+      total: 2,
+      totalPages: 2,
+    },
+    {
+      page: 1,
+      limit: 2,
+      completed: 'true',
+      assigneeId: '999',
+      ids: [],
+      total: 0,
+      totalPages: 0,
+    },
+  ])('paginates tasks: %j', async (testCase) => {
+    const { page, limit, ids, total, totalPages, ...filters } = testCase;
+
+    await database.prisma.user.create({ data: { name: 'Анна' } });
+    const tasks = [
+      { id: 1, title: 'Первая', completed: false, assigneeId: 1 },
+      { id: 2, title: 'Вторая', completed: true, assigneeId: 1 },
+      { id: 3, title: 'Третья', completed: false, assigneeId: 1 },
+      { id: 4, title: 'Четвёртая', completed: false, assigneeId: null },
+      { id: 5, title: 'Пятая', completed: true, assigneeId: null },
+    ];
+    await database.prisma.task.createMany({ data: tasks });
+
+    await request(app.getHttpServer())
+      .get('/tasks')
+      .query({ page, limit, ...filters })
+      .expect(200)
+      .expect({
+        items: tasks.filter((task) => ids.includes(task.id)),
+        total,
+        page,
+        limit,
+        totalPages,
+      });
+  });
+
+  it('uses default pagination and limits the number of returned tasks', async () => {
+    await database.prisma.task.createMany({
+      data: Array.from({ length: 12 }, (_, index) => ({
+        title: `Задача ${index + 1}`,
+      })),
+    });
+
+    const items = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      title: `Задача ${index + 1}`,
+      completed: false,
+      assigneeId: null,
+    }));
+
+    await request(app.getHttpServer()).get('/tasks').expect(200).expect({
+      items,
+      total: 12,
+      page: 1,
+      limit: 10,
+      totalPages: 2,
+    });
+  });
+
+  it.each([
+    'page=0',
+    'page=-1',
+    'page=1.5',
+    'page=abc',
+    'page=',
+    'page=1e2',
+    'page=2147483648',
+    'page=1&page=2',
+    'page=2147483647&limit=100',
+    'limit=0',
+    'limit=-1',
+    'limit=1.5',
+    'limit=abc',
+    'limit=',
+    'limit=101',
+    'limit=1&limit=2',
+  ])('rejects invalid pagination: %s', (query) => {
     return request(app.getHttpServer()).get(`/tasks?${query}`).expect(400);
   });
 

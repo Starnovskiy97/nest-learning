@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import type { TaskPage } from './task-page.interface';
 import type { Task } from './task.interface';
 
 @Injectable()
@@ -14,14 +19,35 @@ export class TasksService {
     private readonly prisma: PrismaService,
   ) {}
 
-  findAll(filters: FilterTasksDto = {}): Promise<Task[]> {
-    return this.prisma.task.findMany({
-      where: {
-        completed: filters.completed,
-        assigneeId: filters.assigneeId,
-      },
-      orderBy: { id: 'asc' },
-    });
+  async findAll(
+    filters: FilterTasksDto = new FilterTasksDto(),
+  ): Promise<TaskPage> {
+    const { page, limit } = filters;
+    const skip = (page - 1) * limit;
+
+    if (skip > 2147483647) {
+      throw new BadRequestException('Pagination offset is too large');
+    }
+
+    const where: Prisma.TaskWhereInput = {
+      completed: filters.completed,
+      assigneeId: filters.assigneeId,
+    };
+
+    const [items, total] = await this.prisma.$transaction(
+      [
+        this.prisma.task.findMany({
+          where,
+          orderBy: { id: 'asc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.task.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: number): Promise<Task> {

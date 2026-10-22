@@ -14,6 +14,7 @@ import {
 import { CreateTaskDto } from './dto/create-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import type { TaskPage } from './task-page.interface';
 import type { Task } from './task.interface';
 import { TasksService } from './tasks.service';
 
@@ -22,7 +23,7 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Get()
-  findAll(@Query() filters: FilterTasksDto): Promise<Task[]> {
+  findAll(@Query() filters: FilterTasksDto): Promise<TaskPage> {
     return this.tasksService.findAll(filters);
   }
 
