@@ -30,6 +30,7 @@ describe('AppController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
       new ValidationPipe({
+        transform: true,
         whitelist: true,
         forbidNonWhitelisted: true,
       }),
@@ -266,6 +267,56 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer()).patch('/tasks/1').send(body).expect(400);
 
     await request(app.getHttpServer()).get('/tasks/1').expect(200).expect(task);
+  });
+
+  it.each([
+    { query: {}, ids: [1, 2, 3, 4] },
+    { query: { completed: 'false' }, ids: [1, 3, 4] },
+    { query: { completed: 'true' }, ids: [2] },
+    { query: { assigneeId: '1' }, ids: [1, 2] },
+    { query: { assigneeId: '2' }, ids: [3] },
+    { query: { completed: 'false', assigneeId: '1' }, ids: [1] },
+    { query: { completed: 'true', assigneeId: '2' }, ids: [] },
+    { query: { assigneeId: '999' }, ids: [] },
+  ])('filters tasks: $query', async ({ query, ids }) => {
+    await database.prisma.user.createMany({
+      data: [{ name: 'Анна' }, { name: 'Иван' }],
+    });
+
+    const tasks = [
+      { id: 1, title: 'Первая', completed: false, assigneeId: 1 },
+      { id: 2, title: 'Вторая', completed: true, assigneeId: 1 },
+      { id: 3, title: 'Третья', completed: false, assigneeId: 2 },
+      { id: 4, title: 'Без исполнителя', completed: false, assigneeId: null },
+    ];
+
+    await database.prisma.task.createMany({ data: tasks });
+
+    await request(app.getHttpServer())
+      .get('/tasks')
+      .query(query)
+      .expect(200)
+      .expect(tasks.filter((task) => ids.includes(task.id)));
+  });
+
+  it.each([
+    'completed=yes',
+    'completed=1',
+    'completed=',
+    'completed=null',
+    'completed=true&completed=false',
+    'assigneeId=abc',
+    'assigneeId=0',
+    'assigneeId=-1',
+    'assigneeId=1.5',
+    'assigneeId=1e2',
+    'assigneeId=',
+    'assigneeId=2147483648',
+    'assigneeId=999999999999999999999',
+    'assigneeId=1&assigneeId=2',
+    'unexpected=value',
+  ])('rejects invalid task filters: %s', (query) => {
+    return request(app.getHttpServer()).get(`/tasks?${query}`).expect(400);
   });
 
   afterEach(async () => {

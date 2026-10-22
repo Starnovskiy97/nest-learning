@@ -3,6 +3,7 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import type { Task } from './task.interface';
 
@@ -13,8 +14,14 @@ export class TasksService {
     private readonly prisma: PrismaService,
   ) {}
 
-  findAll(): Promise<Task[]> {
-    return this.prisma.task.findMany({ orderBy: { id: 'asc' } });
+  findAll(filters: FilterTasksDto = {}): Promise<Task[]> {
+    return this.prisma.task.findMany({
+      where: {
+        completed: filters.completed,
+        assigneeId: filters.assigneeId,
+      },
+      orderBy: { id: 'asc' },
+    });
   }
 
   async findOne(id: number): Promise<Task> {

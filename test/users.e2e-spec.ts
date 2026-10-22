@@ -30,6 +30,7 @@ describe('Users (e2e)', () => {
       moduleFixture.createNestApplication<INestApplication<App>>();
     application.useGlobalPipes(
       new ValidationPipe({
+        transform: true,
         whitelist: true,
         forbidNonWhitelisted: true,
       }),
