@@ -53,7 +53,7 @@ describe('Users (e2e)', () => {
   });
 
   it('keeps users after restarting the application', async () => {
-    const user = { id: 1, name: 'Сохранённый пользователь' };
+    const user = { id: 1, name: 'Сохранённый пользователь', email: null };
 
     await request(app.getHttpServer())
       .post('/users')
@@ -124,7 +124,7 @@ describe('Users (e2e)', () => {
     await request(app.getHttpServer())
       .get('/users/1')
       .expect(200)
-      .expect({ id: 1, name: 'Анна' });
+      .expect({ id: 1, name: 'Анна', email: null });
   });
 
   it('enforces the assignee foreign key in PostgreSQL', async () => {
@@ -144,8 +144,8 @@ describe('Users (e2e)', () => {
   });
 
   it('creates users with distinct ids and retrieves them', async () => {
-    const firstUser = { id: 1, name: 'Анна' };
-    const secondUser = { id: 2, name: 'Иван' };
+    const firstUser = { id: 1, name: 'Анна', email: null };
+    const secondUser = { id: 2, name: 'Иван', email: null };
 
     await request(app.getHttpServer())
       .post('/users')

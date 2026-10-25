@@ -9,9 +9,11 @@ datasource db {
 }
 
 model User {
-  id    Int    @id @default(autoincrement())
-  name  String
-  tasks Task[]
+  id           Int     @id @default(autoincrement())
+  name         String
+  email        String? @unique
+  passwordHash String?
+  tasks        Task[]
 }
 
 model Task {

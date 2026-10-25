@@ -4,6 +4,8 @@
 
 Настройка PostgreSQL, Prisma и миграций: [docs/database.md](docs/database.md).
 
+Регистрация и хеширование паролей: [docs/auth.md](docs/auth.md).
+
 ```bash
 pnpm install
 pnpm start:dev
