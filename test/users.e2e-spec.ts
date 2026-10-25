@@ -1,14 +1,21 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import request from 'supertest';
+import { JwtService } from '@nestjs/jwt';
+import supertest from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestDatabase } from './test-database';
+import { createTaskOwner, TEST_OWNER_ID } from './task-owner.fixture';
 
 describe('Users (e2e)', () => {
   let app: INestApplication<App>;
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
+  let ownerToken: string;
+
+  function request(server: App) {
+    return supertest.agent(server).set('Authorization', `Bearer ${ownerToken}`);
+  }
 
   beforeAll(async () => {
     database = await createTestDatabase();
@@ -36,6 +43,9 @@ describe('Users (e2e)', () => {
       }),
     );
     await application.init();
+    ownerToken = await application
+      .get(JwtService)
+      .signAsync({ sub: TEST_OWNER_ID });
     return application;
   }
 
@@ -68,6 +78,7 @@ describe('Users (e2e)', () => {
   });
 
   it('persists task updates, assignment and deletion across restarts', async () => {
+    await createTaskOwner(database.prisma);
     await request(app.getHttpServer())
       .post('/users')
       .send({ name: 'Анна' })
@@ -83,6 +94,7 @@ describe('Users (e2e)', () => {
       title: 'Задача сохранена',
       completed: true,
       assigneeId: 1,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -128,6 +140,7 @@ describe('Users (e2e)', () => {
   });
 
   it('enforces the assignee foreign key in PostgreSQL', async () => {
+    await createTaskOwner(database.prisma);
     await expect(
       database.prisma.task.create({
         data: { title: 'Несуществующий исполнитель', assigneeId: 999 },
@@ -183,6 +196,7 @@ describe('Users (e2e)', () => {
   });
 
   it('assigns and reassigns a task using the shared users service', async () => {
+    await createTaskOwner(database.prisma);
     for (const name of ['Анна', 'Иван']) {
       await request(app.getHttpServer())
         .post('/users')
@@ -195,6 +209,7 @@ describe('Users (e2e)', () => {
       title: 'Назначить исполнителя',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -223,11 +238,13 @@ describe('Users (e2e)', () => {
   });
 
   it('rejects a missing assignee without partially changing the task', async () => {
+    await createTaskOwner(database.prisma);
     const task = {
       id: 1,
       title: 'Без изменений',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -251,6 +268,7 @@ describe('Users (e2e)', () => {
   it.each([0, -1, 1.5, '1', null, true])(
     'rejects invalid assignee id: %j',
     async (assigneeId) => {
+      await createTaskOwner(database.prisma);
       await request(app.getHttpServer())
         .patch('/tasks/1')
         .send({ assigneeId })
@@ -258,8 +276,9 @@ describe('Users (e2e)', () => {
     },
   );
 
-  it('returns 404 when assigning a missing task', () => {
-    return request(app.getHttpServer())
+  it('returns 404 when assigning a missing task', async () => {
+    await createTaskOwner(database.prisma);
+    await request(app.getHttpServer())
       .patch('/tasks/999')
       .send({ assigneeId: 1 })
       .expect(404);

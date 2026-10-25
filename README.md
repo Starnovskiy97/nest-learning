@@ -6,6 +6,8 @@
 
 Регистрация и хеширование паролей: [docs/auth.md](docs/auth.md).
 
+Доступ к задачам только автору: [docs/task-ownership.md](docs/task-ownership.md).
+
 ```bash
 pnpm install
 pnpm start:dev

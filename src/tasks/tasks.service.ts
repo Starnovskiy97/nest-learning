@@ -20,6 +20,7 @@ export class TasksService {
   ) {}
 
   async findAll(
+    ownerId: number,
     filters: FilterTasksDto = new FilterTasksDto(),
   ): Promise<TaskPage> {
     const { page, limit } = filters;
@@ -30,6 +31,7 @@ export class TasksService {
     }
 
     const where: Prisma.TaskWhereInput = {
+      ownerId,
       completed: filters.completed,
       assigneeId: filters.assigneeId,
     };
@@ -50,8 +52,8 @@ export class TasksService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: number): Promise<Task> {
-    const task = await this.prisma.task.findUnique({ where: { id } });
+  async findOne(id: number, ownerId: number): Promise<Task> {
+    const task = await this.prisma.task.findUnique({ where: { id, ownerId } });
 
     if (!task) {
       throw new NotFoundException(`Task with id ${id} not found`);
@@ -60,9 +62,9 @@ export class TasksService {
     return task;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, ownerId: number): Promise<void> {
     try {
-      await this.prisma.task.delete({ where: { id } });
+      await this.prisma.task.delete({ where: { id, ownerId } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -75,8 +77,12 @@ export class TasksService {
     }
   }
 
-  async update(id: number, updateTaskDto: UpdateTaskDto): Promise<Task> {
-    await this.findOne(id);
+  async update(
+    id: number,
+    updateTaskDto: UpdateTaskDto,
+    ownerId: number,
+  ): Promise<Task> {
+    await this.findOne(id, ownerId);
 
     if (updateTaskDto.assigneeId !== undefined) {
       await this.usersService.findOne(updateTaskDto.assigneeId);
@@ -84,7 +90,7 @@ export class TasksService {
 
     try {
       return await this.prisma.task.update({
-        where: { id },
+        where: { id, ownerId },
         data: {
           title: updateTaskDto.title,
           completed: updateTaskDto.completed,
@@ -108,9 +114,9 @@ export class TasksService {
     }
   }
 
-  create(createTaskDto: CreateTaskDto): Promise<Task> {
+  create(createTaskDto: CreateTaskDto, ownerId: number): Promise<Task> {
     return this.prisma.task.create({
-      data: { title: createTaskDto.title },
+      data: { title: createTaskDto.title, ownerId },
     });
   }
 }

@@ -1,14 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import request from 'supertest';
+import { JwtService } from '@nestjs/jwt';
+import supertest from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestDatabase } from './test-database';
+import { createTaskOwner, TEST_OWNER_ID } from './task-owner.fixture';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
+  let ownerToken: string;
+
+  function request(server: App) {
+    return supertest.agent(server).set('Authorization', `Bearer ${ownerToken}`);
+  }
 
   beforeAll(async () => {
     database = await createTestDatabase();
@@ -20,6 +27,7 @@ describe('AppController (e2e)', () => {
 
   beforeEach(async () => {
     await database.reset();
+    await createTaskOwner(database.prisma);
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -36,6 +44,7 @@ describe('AppController (e2e)', () => {
       }),
     );
     await app.init();
+    ownerToken = await app.get(JwtService).signAsync({ sub: TEST_OWNER_ID });
   });
 
   it('/ (GET)', () => {
@@ -61,12 +70,14 @@ describe('AppController (e2e)', () => {
       title: 'Разобраться с модулями NestJS',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
     const secondTask = {
       id: 2,
       title: 'Изучить контроллеры',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -99,6 +110,7 @@ describe('AppController (e2e)', () => {
       title: 'Изучить параметры URL',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -133,7 +145,13 @@ describe('AppController (e2e)', () => {
       .patch('/tasks/1')
       .send({ completed: true })
       .expect(200)
-      .expect({ id: 1, title, completed: true, assigneeId: null });
+      .expect({
+        id: 1,
+        title,
+        completed: true,
+        assigneeId: null,
+        ownerId: TEST_OWNER_ID,
+      });
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
@@ -144,6 +162,7 @@ describe('AppController (e2e)', () => {
         title: 'Новое название',
         completed: true,
         assigneeId: null,
+        ownerId: TEST_OWNER_ID,
       });
 
     await request(app.getHttpServer())
@@ -155,6 +174,7 @@ describe('AppController (e2e)', () => {
         title: 'Новое название',
         completed: false,
         assigneeId: null,
+        ownerId: TEST_OWNER_ID,
       });
 
     await request(app.getHttpServer()).get('/tasks/1').expect(200).expect({
@@ -162,6 +182,7 @@ describe('AppController (e2e)', () => {
       title: 'Новое название',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     });
   });
 
@@ -171,6 +192,7 @@ describe('AppController (e2e)', () => {
       title: 'Без изменений',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -210,6 +232,7 @@ describe('AppController (e2e)', () => {
       title: 'Оставить',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -281,6 +304,7 @@ describe('AppController (e2e)', () => {
       title: 'Без изменений',
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     };
 
     await request(app.getHttpServer())
@@ -312,7 +336,7 @@ describe('AppController (e2e)', () => {
       { id: 2, title: 'Вторая', completed: true, assigneeId: 1 },
       { id: 3, title: 'Третья', completed: false, assigneeId: 2 },
       { id: 4, title: 'Без исполнителя', completed: false, assigneeId: null },
-    ];
+    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID }));
 
     await database.prisma.task.createMany({ data: tasks });
 
@@ -382,7 +406,7 @@ describe('AppController (e2e)', () => {
       { id: 3, title: 'Третья', completed: false, assigneeId: 1 },
       { id: 4, title: 'Четвёртая', completed: false, assigneeId: null },
       { id: 5, title: 'Пятая', completed: true, assigneeId: null },
-    ];
+    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID }));
     await database.prisma.task.createMany({ data: tasks });
 
     await request(app.getHttpServer())
@@ -402,6 +426,7 @@ describe('AppController (e2e)', () => {
     await database.prisma.task.createMany({
       data: Array.from({ length: 12 }, (_, index) => ({
         title: `Задача ${index + 1}`,
+        ownerId: TEST_OWNER_ID,
       })),
     });
 
@@ -410,6 +435,7 @@ describe('AppController (e2e)', () => {
       title: `Задача ${index + 1}`,
       completed: false,
       assigneeId: null,
+      ownerId: TEST_OWNER_ID,
     }));
 
     await request(app.getHttpServer()).get('/tasks').expect(200).expect({

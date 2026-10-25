@@ -3,4 +3,5 @@ export interface Task {
   title: string;
   completed: boolean;
   assigneeId: number | null;
+  ownerId: number | null;
 }
