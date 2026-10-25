@@ -51,4 +51,14 @@ export class UsersService {
       select: publicUserSelect,
     });
   }
+
+  findCredentialsByEmail(email: string): Promise<{
+    id: number;
+    passwordHash: string | null;
+  } | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, passwordHash: true },
+    });
+  }
 }

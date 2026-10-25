@@ -2,6 +2,22 @@ import { scrypt } from 'node:crypto';
 import { PasswordHasherService } from './password-hasher.service';
 
 describe('PasswordHasherService', () => {
+  it('accepts the correct password and rejects an incorrect one', async () => {
+    const hasher = new PasswordHasherService();
+    const hash = await hasher.hash('a-long-test-password');
+
+    expect(await hasher.verify('a-long-test-password', hash)).toBe(true);
+    expect(await hasher.verify('wrong-password', hash)).toBe(false);
+  });
+
+  it.each([null, 'invalid-hash', 'scrypt$999999999$8$1$bad$bad'])(
+    'rejects missing or unsupported hashes: %j',
+    async (hash) => {
+      const hasher = new PasswordHasherService();
+      expect(await hasher.verify('a-long-test-password', hash)).toBe(false);
+    },
+  );
+
   it('uses a random salt and stores a verifiable scrypt hash', async () => {
     const hasher = new PasswordHasherService();
     const password = ' A long password with spaces ';
