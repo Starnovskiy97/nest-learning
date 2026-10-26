@@ -8,6 +8,9 @@
 
 Доступ к задачам только автору: [docs/task-ownership.md](docs/task-ownership.md).
 
+Практика по индексам и планам запросов: [docs/indexes-lab.md](docs/indexes-lab.md)
+(`pnpm db:lab:indexes`).
+
 ```bash
 pnpm install
 pnpm start:dev

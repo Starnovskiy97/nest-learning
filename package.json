@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
+    "db:lab:indexes": "ts-node scripts/indexes-lab.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
