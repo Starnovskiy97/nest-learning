@@ -16,6 +16,8 @@ Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](
 
 Защита создания задач от повторов: [docs/task-idempotency.md](docs/task-idempotency.md).
 
+Конкурентное редактирование задач: [docs/task-concurrency.md](docs/task-concurrency.md).
+
 ```bash
 pnpm install
 pnpm start:dev

@@ -84,7 +84,12 @@ export class TasksService {
     updateTaskDto: UpdateTaskDto,
     ownerId: number,
   ): Promise<Task> {
-    await this.findOne(id, ownerId);
+    const current = await this.findOne(id, ownerId);
+    if (current.version !== updateTaskDto.version) {
+      throw new ConflictException(
+        'Task has changed; reload it before updating',
+      );
+    }
 
     if (updateTaskDto.assigneeId !== undefined) {
       await this.usersService.findOne(updateTaskDto.assigneeId);
@@ -92,17 +97,23 @@ export class TasksService {
 
     try {
       return await this.prisma.task.update({
-        where: { id, ownerId },
+        where: { id, ownerId, version: updateTaskDto.version },
         data: {
           title: updateTaskDto.title,
           completed: updateTaskDto.completed,
           assigneeId: updateTaskDto.assigneeId,
+          version: { increment: 1 },
         },
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException(`Task with id ${id} not found`);
+          // The initial read is not a lock: a concurrent PATCH may have won.
+          // Keep missing/foreign tasks as 404; otherwise report a stale version.
+          await this.findOne(id, ownerId);
+          throw new ConflictException(
+            'Task has changed; reload it before updating',
+          );
         }
 
         if (error.code === 'P2003' && updateTaskDto.assigneeId !== undefined) {
@@ -177,6 +188,7 @@ export class TasksService {
       title: snapshot.title,
       ownerId: snapshot.ownerId,
       completed: false,
+      version: 1,
       assigneeId: null,
     };
   }

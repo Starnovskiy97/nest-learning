@@ -113,7 +113,7 @@ describe('Task creation idempotency (e2e)', () => {
     await request(app.getHttpServer())
       .patch(`/tasks/${id}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Изменено', completed: true })
+      .send({ title: 'Изменено', completed: true, version: 1 })
       .expect(200);
     await create(key)
       .expect(201)

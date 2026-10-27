@@ -92,6 +92,7 @@ describe('Users (e2e)', () => {
     const task = {
       id: 1,
       title: 'Задача сохранена',
+      version: 2,
       completed: true,
       assigneeId: 1,
       ownerId: TEST_OWNER_ID,
@@ -99,7 +100,7 @@ describe('Users (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ title: task.title, completed: true, assigneeId: 1 })
+      .send({ title: task.title, completed: true, assigneeId: 1, version: 1 })
       .expect(200)
       .expect(task);
 
@@ -207,6 +208,7 @@ describe('Users (e2e)', () => {
     const task = {
       id: 1,
       title: 'Назначить исполнителя',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -220,21 +222,21 @@ describe('Users (e2e)', () => {
     for (const assigneeId of [1, 2]) {
       await request(app.getHttpServer())
         .patch('/tasks/1')
-        .send({ assigneeId })
+        .send({ assigneeId, version: assigneeId })
         .expect(200)
-        .expect({ ...task, assigneeId });
+        .expect({ ...task, assigneeId, version: assigneeId + 1 });
     }
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ completed: true })
+      .send({ completed: true, version: 3 })
       .expect(200)
-      .expect({ ...task, assigneeId: 2, completed: true });
+      .expect({ ...task, assigneeId: 2, completed: true, version: 4 });
 
     await request(app.getHttpServer())
       .get('/tasks/1')
       .expect(200)
-      .expect({ ...task, assigneeId: 2, completed: true });
+      .expect({ ...task, assigneeId: 2, completed: true, version: 4 });
   });
 
   it('rejects a missing assignee without partially changing the task', async () => {
@@ -242,6 +244,7 @@ describe('Users (e2e)', () => {
     const task = {
       id: 1,
       title: 'Без изменений',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -254,7 +257,12 @@ describe('Users (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ title: 'Не сохранять', completed: true, assigneeId: 999 })
+      .send({
+        title: 'Не сохранять',
+        completed: true,
+        assigneeId: 999,
+        version: 1,
+      })
       .expect(404)
       .expect({
         message: 'User with id 999 not found',
@@ -271,7 +279,7 @@ describe('Users (e2e)', () => {
       await createTaskOwner(database.prisma);
       await request(app.getHttpServer())
         .patch('/tasks/1')
-        .send({ assigneeId })
+        .send({ assigneeId, version: 1 })
         .expect(400);
     },
   );
@@ -280,7 +288,7 @@ describe('Users (e2e)', () => {
     await createTaskOwner(database.prisma);
     await request(app.getHttpServer())
       .patch('/tasks/999')
-      .send({ assigneeId: 1 })
+      .send({ assigneeId: 1, version: 1 })
       .expect(404);
   });
 
