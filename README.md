@@ -14,6 +14,8 @@
 Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](docs/nginx-rate-limiting.md)
 (`pnpm proxy:up`, `pnpm test:proxy`).
 
+Защита создания задач от повторов: [docs/task-idempotency.md](docs/task-idempotency.md).
+
 ```bash
 pnpm install
 pnpm start:dev

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -47,8 +48,13 @@ export class TasksController {
   create(
     @Req() request: AuthenticatedRequest,
     @Body() createTaskDto: CreateTaskDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<Task> {
-    return this.tasksService.create(createTaskDto, request.user.id);
+    return this.tasksService.create(
+      createTaskDto,
+      request.user.id,
+      idempotencyKey,
+    );
   }
 
   @Delete(':id')
