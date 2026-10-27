@@ -1,6 +1,19 @@
 name: nest-learning
 
 services:
+  nginx:
+    image: nginx:1.28-alpine
+    profiles: ['proxy']
+    environment:
+      API_UPSTREAM: host.docker.internal:3000
+      NGINX_ENVSUBST_FILTER: '^API_UPSTREAM$$'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '127.0.0.1:8080:80'
+    volumes:
+      - ./infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+
   postgres:
     image: postgres:17-alpine
     environment:

@@ -11,6 +11,9 @@
 Практика по индексам и планам запросов: [docs/indexes-lab.md](docs/indexes-lab.md)
 (`pnpm db:lab:indexes`).
 
+Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](docs/nginx-rate-limiting.md)
+(`pnpm proxy:up`, `pnpm test:proxy`).
+
 ```bash
 pnpm install
 pnpm start:dev
