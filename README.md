@@ -18,6 +18,12 @@ Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](
 
 Конкурентное редактирование задач: [docs/task-concurrency.md](docs/task-concurrency.md).
 
+Два экземпляра API за Nginx: [docs/load-balancing.md](docs/load-balancing.md)
+(`pnpm proxy:balanced:up`, `pnpm test:balancing`).
+
+Сравнение под нагрузкой: [docs/load-testing.md](docs/load-testing.md)
+(`pnpm lab:load --quick`, `pnpm lab:load`).
+
 ```bash
 pnpm install
 pnpm start:dev
