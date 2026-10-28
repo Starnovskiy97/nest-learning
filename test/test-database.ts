@@ -66,6 +66,7 @@ export async function createTestDatabase() {
   }
 
   return {
+    schema,
     prisma,
     async reset(): Promise<void> {
       await pool.query(

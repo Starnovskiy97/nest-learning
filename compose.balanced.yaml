@@ -1,0 +1,5 @@
+# Overlay for the existing nginx service, not an additional proxy on port 8080.
+services:
+  nginx:
+    environment:
+      API_EXTRA_SERVER: 'server host.docker.internal:3001;'

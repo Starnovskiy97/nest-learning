@@ -6,7 +6,8 @@ services:
     profiles: ['proxy']
     environment:
       API_UPSTREAM: host.docker.internal:3000
-      NGINX_ENVSUBST_FILTER: '^API_UPSTREAM$$'
+      API_EXTRA_SERVER: ''
+      NGINX_ENVSUBST_FILTER: '^API_(UPSTREAM|EXTRA_SERVER)$$'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
