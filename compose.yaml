@@ -1,6 +1,29 @@
 name: nest-learning
 
 services:
+  redis:
+    image: redis:8.2-alpine
+    profiles: ['cache']
+    command:
+      [
+        'redis-server',
+        '--maxmemory',
+        '64mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+      ]
+    ports:
+      - '127.0.0.1:6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
   nginx:
     image: nginx:1.28-alpine
     profiles: ['proxy']

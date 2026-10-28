@@ -15,6 +15,7 @@ import { createTestDatabase } from '../test/test-database';
 const exec = promisify(execFile);
 
 async function main(): Promise<void> {
+  process.env.REDIS_URL = '';
   // Never use the local application's secret for this isolated experiment.
   process.env.JWT_SECRET =
     'balancing-test-only-secret-not-for-real-deployments';

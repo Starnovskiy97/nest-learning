@@ -13,12 +13,14 @@ import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import type { TaskPage } from './task-page.interface';
 import type { Task } from './task.interface';
+import { TasksCacheService } from './tasks-cache.service';
 
 @Injectable()
 export class TasksService {
   constructor(
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
+    private readonly cache: TasksCacheService,
   ) {}
 
   async findAll(
@@ -31,6 +33,9 @@ export class TasksService {
     if (skip > 2147483647) {
       throw new BadRequestException('Pagination offset is too large');
     }
+
+    const cached = await this.cache.get(ownerId, filters);
+    if (cached) return cached;
 
     const where: Prisma.TaskWhereInput = {
       ownerId,
@@ -51,7 +56,15 @@ export class TasksService {
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
 
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const result = {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+    await this.cache.set(ownerId, filters, result);
+    return result;
   }
 
   async findOne(id: number, ownerId: number): Promise<Task> {

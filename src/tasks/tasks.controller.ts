@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   HttpStatus,
@@ -29,6 +30,7 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-store')
   findAll(
     @Req() request: AuthenticatedRequest,
     @Query() filters: FilterTasksDto,

@@ -96,6 +96,7 @@ async function main(): Promise<void> {
               execArgv: ['-r', 'ts-node/register'],
               env: {
                 ...process.env,
+                REDIS_URL: '',
                 JWT_SECRET: 'load-lab-only-secret-never-for-real-deployments',
                 LOAD_SCHEMA: database.schema,
                 LOAD_APPLICATION_NAME: name,

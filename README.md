@@ -24,6 +24,9 @@ Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](
 Сравнение под нагрузкой: [docs/load-testing.md](docs/load-testing.md)
 (`pnpm lab:load --quick`, `pnpm lab:load`).
 
+Redis-кэш списка задач: [docs/task-cache.md](docs/task-cache.md)
+(`pnpm cache:up`, `pnpm test:cache`).
+
 ```bash
 pnpm install
 pnpm start:dev
