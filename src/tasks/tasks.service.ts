@@ -34,7 +34,15 @@ export class TasksService {
       throw new BadRequestException('Pagination offset is too large');
     }
 
-    const cached = await this.cache.get(ownerId, filters);
+    // Capture once. A late reader must write to this generation, never a newer one.
+    // Offline/disabled cache does not add a generation query to the SQL-only path.
+    const generation = this.cache.isReady
+      ? await this.cacheGeneration(ownerId)
+      : null;
+    const cached =
+      generation === null
+        ? null
+        : await this.cache.get(ownerId, filters, generation);
     if (cached) return cached;
 
     const where: Prisma.TaskWhereInput = {
@@ -63,7 +71,9 @@ export class TasksService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
-    await this.cache.set(ownerId, filters, result);
+    if (generation !== null) {
+      await this.cache.set(ownerId, filters, result, generation);
+    }
     return result;
   }
 
@@ -79,7 +89,10 @@ export class TasksService {
 
   async remove(id: number, ownerId: number): Promise<void> {
     try {
-      await this.prisma.task.delete({ where: { id, ownerId } });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.task.delete({ where: { id, ownerId } });
+        await this.advanceCacheGeneration(tx, ownerId);
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -109,14 +122,18 @@ export class TasksService {
     }
 
     try {
-      return await this.prisma.task.update({
-        where: { id, ownerId, version: updateTaskDto.version },
-        data: {
-          title: updateTaskDto.title,
-          completed: updateTaskDto.completed,
-          assigneeId: updateTaskDto.assigneeId,
-          version: { increment: 1 },
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        const task = await tx.task.update({
+          where: { id, ownerId, version: updateTaskDto.version },
+          data: {
+            title: updateTaskDto.title,
+            completed: updateTaskDto.completed,
+            assigneeId: updateTaskDto.assigneeId,
+            version: { increment: 1 },
+          },
+        });
+        await this.advanceCacheGeneration(tx, ownerId);
+        return task;
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -147,7 +164,11 @@ export class TasksService {
   ): Promise<Task> {
     const data = { title: createTaskDto.title, ownerId };
     if (idempotencyKey === undefined) {
-      return this.prisma.task.create({ data });
+      return this.prisma.$transaction(async (tx) => {
+        const task = await tx.task.create({ data });
+        await this.advanceCacheGeneration(tx, ownerId);
+        return task;
+      });
     }
     if (!isUUID(idempotencyKey, '4')) {
       throw new BadRequestException('Idempotency-Key must be a UUID v4');
@@ -166,6 +187,7 @@ export class TasksService {
         await tx.taskCreationRequest.create({
           data: { ownerId, key, title: task.title, taskId: task.id },
         });
+        await this.advanceCacheGeneration(tx, ownerId);
         return task;
       });
     } catch (error) {
@@ -182,6 +204,26 @@ export class TasksService {
       }
       throw error;
     }
+  }
+
+  private async cacheGeneration(ownerId: number): Promise<bigint> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { taskCacheGeneration: true },
+    });
+    if (!user) throw new NotFoundException('Task owner not found');
+    return user.taskCacheGeneration;
+  }
+
+  private async advanceCacheGeneration(
+    tx: Prisma.TransactionClient,
+    ownerId: number,
+  ): Promise<void> {
+    await tx.user.update({
+      where: { id: ownerId },
+      data: { taskCacheGeneration: { increment: 1 } },
+      select: { id: true },
+    });
   }
 
   private replayCreation(

@@ -54,20 +54,25 @@ export class TasksCacheService implements OnModuleInit, OnModuleDestroy {
     if (this.client?.isOpen) this.client.destroy();
   }
 
-  key(ownerId: number, filters: FilterTasksDto): string {
-    return `${this.options.namespace}:${ownerId}:${filters.completed ?? 'any'}:${filters.assigneeId ?? 'any'}:${filters.page}:${filters.limit}`;
+  get isReady(): boolean {
+    return this.client?.isReady ?? false;
+  }
+
+  key(ownerId: number, filters: FilterTasksDto, generation: bigint): string {
+    return `${this.options.namespace}:${ownerId}:g${generation}:${filters.completed ?? 'any'}:${filters.assigneeId ?? 'any'}:${filters.page}:${filters.limit}`;
   }
 
   async get(
     ownerId: number,
     filters: FilterTasksDto,
+    generation: bigint,
   ): Promise<TaskPage | null> {
     if (!this.client?.isReady) return null;
     let value: string | null;
     try {
       value = await this.client
         .withCommandOptions({ timeout: 100 })
-        .get(this.key(ownerId, filters));
+        .get(this.key(ownerId, filters, generation));
     } catch {
       this.warn();
       return null;
@@ -85,12 +90,13 @@ export class TasksCacheService implements OnModuleInit, OnModuleDestroy {
     ownerId: number,
     filters: FilterTasksDto,
     page: TaskPage,
+    generation: bigint,
   ): Promise<void> {
     if (!this.client?.isReady) return;
     try {
       await this.client
         .withCommandOptions({ timeout: 100 })
-        .set(this.key(ownerId, filters), JSON.stringify(page), {
+        .set(this.key(ownerId, filters, generation), JSON.stringify(page), {
           EX: this.options.ttlSeconds,
         });
     } catch {

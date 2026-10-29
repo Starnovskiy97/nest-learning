@@ -52,30 +52,30 @@ describe('TasksCacheService failure boundaries', () => {
     service = new TasksCacheService({ ...options, url: '' });
     service.onModuleInit();
     expect(createClient).not.toHaveBeenCalled();
-    expect(await service.get(1, filters)).toBeNull();
+    expect(await service.get(1, filters, 1n)).toBeNull();
   });
 
   it('does not enqueue reads or writes while not ready', async () => {
     service.onModuleInit();
     client.isReady = false;
-    expect(await service.get(1, filters)).toBeNull();
-    await service.set(1, filters, page);
+    expect(await service.get(1, filters, 1n)).toBeNull();
+    await service.set(1, filters, page, 1n);
     expect(client.withCommandOptions).not.toHaveBeenCalled();
   });
 
   it('turns a GET error into a cache miss and bounds command waiting', async () => {
     service.onModuleInit();
     get.mockRejectedValueOnce(new Error('Command timeout'));
-    expect(await service.get(1, filters)).toBeNull();
+    expect(await service.get(1, filters, 1n)).toBeNull();
     expect(client.withCommandOptions).toHaveBeenCalledWith({ timeout: 100 });
   });
 
   it('does not fail a successful database read when SET fails', async () => {
     service.onModuleInit();
     set.mockRejectedValueOnce(new Error('Redis out of memory'));
-    await expect(service.set(1, filters, page)).resolves.toBeUndefined();
+    await expect(service.set(1, filters, page, 1n)).resolves.toBeUndefined();
     expect(set).toHaveBeenCalledWith(
-      service.key(1, filters),
+      service.key(1, filters, 1n),
       JSON.stringify(page),
       { EX: 5 },
     );
@@ -85,5 +85,12 @@ describe('TasksCacheService failure boundaries', () => {
     service.onModuleInit();
     service.onModuleDestroy();
     expect(client.destroy).toHaveBeenCalled();
+  });
+
+  it('separates generations without converting bigint to a lossy number', () => {
+    expect(service.key(1, filters, 1n)).not.toBe(service.key(1, filters, 2n));
+    expect(service.key(1, filters, 9007199254740993n)).toContain(
+      ':g9007199254740993:',
+    );
   });
 });

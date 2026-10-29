@@ -27,6 +27,8 @@ Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](
 Redis-кэш списка задач: [docs/task-cache.md](docs/task-cache.md)
 (`pnpm cache:up`, `pnpm test:cache`).
 
+Инвалидация кэша и защита от поздних чтений: [docs/cache-invalidation.md](docs/cache-invalidation.md).
+
 ```bash
 pnpm install
 pnpm start:dev

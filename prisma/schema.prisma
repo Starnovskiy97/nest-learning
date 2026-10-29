@@ -13,6 +13,7 @@ model User {
   name                 String
   email                String?               @unique
   passwordHash         String?
+  taskCacheGeneration  BigInt                @default(1)
   tasks                Task[]                @relation("TaskAssignee")
   ownedTasks           Task[]                @relation("TaskOwner")
   taskCreationRequests TaskCreationRequest[]

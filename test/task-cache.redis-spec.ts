@@ -50,15 +50,20 @@ describe('Task page Redis cache (isolated integration)', () => {
   async function waitForCache(application = app, seed = false) {
     const cache = application.get(TasksCacheService);
     for (let attempt = 0; attempt < 100; attempt++) {
-      if (await cache.get(1, filters)) return;
+      if (await cache.get(1, filters, 1n)) return;
       if (seed)
-        await cache.set(1, filters, {
-          items: [],
-          total: 0,
-          page: 1,
-          limit: 10,
-          totalPages: 0,
-        });
+        await cache.set(
+          1,
+          filters,
+          {
+            items: [],
+            total: 0,
+            page: 1,
+            limit: 10,
+            totalPages: 0,
+          },
+          1n,
+        );
       await delay(10);
     }
     throw new Error('Application Redis connection is not ready');
@@ -105,7 +110,7 @@ describe('Task page Redis cache (isolated integration)', () => {
     app = await startApp();
     token = await app.get(JwtService).signAsync({ sub: 1 });
     await waitForCache(app, true);
-    await admin.del(app.get(TasksCacheService).key(1, filters));
+    await admin.del(app.get(TasksCacheService).key(1, filters, 1n));
   });
   afterEach(async () => {
     jest.restoreAllMocks();
@@ -129,7 +134,9 @@ describe('Task page Redis cache (isolated integration)', () => {
     const second = await get({ page: 1, limit: 10 }).expect(200);
     expect(second.body).toEqual(first.body);
     expect(transaction).toHaveBeenCalledTimes(1);
-    const ttl = await admin.pTTL(app.get(TasksCacheService).key(1, filters));
+    const ttl = await admin.pTTL(
+      app.get(TasksCacheService).key(1, filters, 1n),
+    );
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(2000);
   });
@@ -175,7 +182,7 @@ describe('Task page Redis cache (isolated integration)', () => {
 
   it('expires naturally without extending TTL on reads', async () => {
     await get().expect(200);
-    const key = app.get(TasksCacheService).key(1, filters);
+    const key = app.get(TasksCacheService).key(1, filters, 1n);
     await delay(1100);
     await get().expect(200);
     expect(await admin.pTTL(key)).toBeLessThan(1100);
@@ -185,26 +192,32 @@ describe('Task page Redis cache (isolated integration)', () => {
     expect(transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('intentionally serves stale data after writes until expiry', async () => {
-    const old = await get().expect(200);
+  it('invalidates immediately after create, update and delete', async () => {
+    await get().expect(200);
     await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Новая' })
       .expect(201);
+    const created = await get().expect(200);
+    expect(created.body).toMatchObject({ total: 3 });
     await request(app.getHttpServer())
       .patch('/tasks/1')
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Изменено', version: 1 })
       .expect(200);
+    const updated = await get().expect(200);
+    expect(updated.body).toMatchObject({
+      items: [
+        { title: 'Изменено', version: 2 },
+        { title: 'Готовая' },
+        { title: 'Новая' },
+      ],
+    });
     await request(app.getHttpServer())
       .delete('/tasks/2')
       .set('Authorization', `Bearer ${token}`)
       .expect(204);
-    const stale = await get().expect(200);
-    expect(stale.body).toEqual(old.body);
-    await admin.pExpire(app.get(TasksCacheService).key(1, filters), 20);
-    await delay(40);
     const fresh = await get().expect(200);
     expect(fresh.body).toMatchObject({
       total: 2,
@@ -230,7 +243,7 @@ describe('Task page Redis cache (isolated integration)', () => {
       const page = first.body as { items: Array<Record<string, unknown>> };
       if (variant === 'wrong owner') page.items[0].ownerId = 2;
       if (variant === 'missing version') delete page.items[0].version;
-      const key = app.get(TasksCacheService).key(1, filters);
+      const key = app.get(TasksCacheService).key(1, filters, 1n);
       await admin.set(
         key,
         variant === '{broken json' ? variant : JSON.stringify(page),
@@ -266,7 +279,7 @@ describe('Task page Redis cache (isolated integration)', () => {
     page.internalNote = 'must not be returned';
     page.items[0].passwordHash = 'must not be returned';
     await admin.set(
-      app.get(TasksCacheService).key(1, filters),
+      app.get(TasksCacheService).key(1, filters, 1n),
       JSON.stringify(page),
     );
     const transaction = jest.spyOn(database.prisma, '$transaction');
@@ -284,5 +297,225 @@ describe('Task page Redis cache (isolated integration)', () => {
       .mockRejectedValueOnce(new Error('Test database failure'));
     await get().expect(500);
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  async function generation(ownerId = 1): Promise<bigint> {
+    const user = await database.prisma.user.findUniqueOrThrow({
+      where: { id: ownerId },
+      select: { taskCacheGeneration: true },
+    });
+    return user.taskCacheGeneration;
+  }
+
+  it('invalidates all filter/page variants but not another author', async () => {
+    await get({ completed: 'false' }).expect(200);
+    await get({ completed: 'true' }).expect(200);
+    await get({ page: 2, limit: 1 }).expect(200);
+    await get({ assigneeId: 2 }).expect(200);
+    const otherToken = await app.get(JwtService).signAsync({ sub: 2 });
+    await get({}, otherToken).expect(200);
+    await request(app.getHttpServer())
+      .patch('/tasks/1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ completed: true, assigneeId: 2, version: 1 })
+      .expect(200);
+    expect(await generation()).toBe(2n);
+    expect(await generation(2)).toBe(1n);
+    const transaction = jest.spyOn(database.prisma, '$transaction');
+    await get({}, otherToken).expect(200);
+    expect(transaction).not.toHaveBeenCalled();
+    const pending = await get({ completed: 'false' }).expect(200);
+    expect(pending.body).toMatchObject({ total: 0 });
+    const done = await get({ completed: 'true' }).expect(200);
+    expect(done.body).toMatchObject({ total: 2 });
+    await get({ page: 2, limit: 1 }).expect(200);
+    const assigned = await get({ assigneeId: 2 }).expect(200);
+    expect(assigned.body).toMatchObject({
+      total: 1,
+      items: [{ title: 'Первая' }],
+    });
+    expect(transaction).toHaveBeenCalledTimes(4);
+  });
+
+  it('invalidates across instances without updating Redis generation metadata', async () => {
+    await get().expect(200);
+    const secondApp = await startApp();
+    await waitForCache(secondApp);
+    await request(secondApp.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Из другого API' })
+      .expect(201);
+    const fresh = await get().expect(200);
+    expect(fresh.body).toMatchObject({ total: 3 });
+    expect(await generation()).toBe(2n);
+    // Old pages may still physically exist, but no new read selects their key.
+    expect(
+      await admin.exists(app.get(TasksCacheService).key(1, filters, 1n)),
+    ).toBe(1);
+  });
+
+  it('does not let a late cache SET resurrect an invalidated page', async () => {
+    const cache = app.get(TasksCacheService);
+    const originalSet = cache.set.bind(cache);
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const releasePromise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    jest.spyOn(cache, 'set').mockImplementationOnce(async (...args) => {
+      entered();
+      await releasePromise;
+      await originalSet(...args);
+    });
+    const oldRead = get()
+      .expect(200)
+      .then((response) => response);
+    try {
+      await enteredPromise;
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'После чтения' })
+        .expect(201);
+    } finally {
+      release();
+    }
+    const old = await oldRead;
+    expect(old.body).toMatchObject({ total: 2 });
+    const late = await admin.get(cache.key(1, filters, 1n));
+    expect(late).not.toBeNull();
+    const fresh = await get().expect(200);
+    expect(fresh.body).toMatchObject({ total: 3 });
+    expect(await admin.exists(cache.key(1, filters, 2n))).toBe(1);
+  });
+
+  it('does not advance generation on failed mutations', async () => {
+    await get().expect(200);
+    await request(app.getHttpServer())
+      .patch('/tasks/1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Нет', version: 999 })
+      .expect(409);
+    await request(app.getHttpServer())
+      .patch('/tasks/1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ assigneeId: 999, version: 1 })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete('/tasks/999')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+    expect(await generation()).toBe(1n);
+    const transaction = jest.spyOn(database.prisma, '$transaction');
+    await get().expect(200);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it('advances once for concurrent idempotent creation, never for replay', async () => {
+    const key = randomUUID();
+    await Promise.all(
+      Array.from({ length: 8 }, () =>
+        request(app.getHttpServer())
+          .post('/tasks')
+          .set('Authorization', `Bearer ${token}`)
+          .set('Idempotency-Key', key)
+          .send({ title: 'Одна операция' })
+          .expect(201),
+      ),
+    );
+    expect(await generation()).toBe(2n);
+    expect(await database.prisma.task.count()).toBe(4);
+    await get().expect(200);
+    const transaction = jest.spyOn(database.prisma, '$transaction');
+    await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Одна операция' })
+      .expect(201);
+    await get().expect(200);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(await generation()).toBe(2n);
+  });
+
+  it('keeps generation current while Redis is offline, then ignores old pages', async () => {
+    await get().expect(200);
+    options = { ...options, url: 'redis://127.0.0.1:1' };
+    const offlineApp = await startApp();
+    await request(offlineApp.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Без Redis' })
+      .expect(201);
+    expect(await generation()).toBe(2n);
+    const fresh = await get().expect(200);
+    expect(fresh.body).toMatchObject({ total: 3 });
+  });
+
+  it('does not lose generation increments on independent concurrent writes', async () => {
+    await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        request(app.getHttpServer())
+          .post('/tasks')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ title: `Новая ${index}` })
+          .expect(201),
+      ),
+    );
+    expect(await generation()).toBe(9n);
+    expect(await generation(2)).toBe(1n);
+    const result = await get().expect(200);
+    expect(result.body).toMatchObject({ total: 10 });
+  });
+
+  it('rolls back task writes and idempotency records if generation update fails', async () => {
+    // The constraint exists ONLY in this randomly named test schema.
+    await database.prisma
+      .$executeRawUnsafe(`ALTER TABLE "${database.schema}"."User"
+      ADD CONSTRAINT "test_generation_ceiling" CHECK ("taskCacheGeneration" <= 1)`);
+    const key = randomUUID();
+    try {
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Без ключа, не фиксировать' })
+        .expect(500);
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .set('Idempotency-Key', key)
+        .send({ title: 'Не фиксировать' })
+        .expect(500);
+      await request(app.getHttpServer())
+        .patch('/tasks/1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Не фиксировать', version: 1 })
+        .expect(500);
+      await request(app.getHttpServer())
+        .delete('/tasks/1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(500);
+      expect(await generation()).toBe(1n);
+      expect(await database.prisma.task.count()).toBe(3);
+      expect(await database.prisma.taskCreationRequest.count()).toBe(0);
+      expect(
+        await database.prisma.task.findUnique({ where: { id: 1 } }),
+      ).toMatchObject({ title: 'Первая', version: 1 });
+    } finally {
+      await database.prisma
+        .$executeRawUnsafe(`ALTER TABLE "${database.schema}"."User"
+        DROP CONSTRAINT "test_generation_ceiling"`);
+    }
+    await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', key)
+      .send({ title: 'Не фиксировать' })
+      .expect(201);
+    expect(await generation()).toBe(2n);
   });
 });
