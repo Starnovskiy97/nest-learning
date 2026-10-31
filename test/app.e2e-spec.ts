@@ -68,6 +68,7 @@ describe('AppController (e2e)', () => {
     const firstTask = {
       id: 1,
       title: 'Разобраться с модулями NestJS',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -75,6 +76,7 @@ describe('AppController (e2e)', () => {
     const secondTask = {
       id: 2,
       title: 'Изучить контроллеры',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -108,6 +110,7 @@ describe('AppController (e2e)', () => {
     const task = {
       id: 1,
       title: 'Изучить параметры URL',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -143,11 +146,12 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ completed: true })
+      .send({ completed: true, version: 1 })
       .expect(200)
       .expect({
         id: 1,
         title,
+        version: 2,
         completed: true,
         assigneeId: null,
         ownerId: TEST_OWNER_ID,
@@ -155,11 +159,12 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ title: 'Новое название' })
+      .send({ title: 'Новое название', version: 2 })
       .expect(200)
       .expect({
         id: 1,
         title: 'Новое название',
+        version: 3,
         completed: true,
         assigneeId: null,
         ownerId: TEST_OWNER_ID,
@@ -167,11 +172,12 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({ completed: false })
+      .send({ completed: false, version: 3 })
       .expect(200)
       .expect({
         id: 1,
         title: 'Новое название',
+        version: 4,
         completed: false,
         assigneeId: null,
         ownerId: TEST_OWNER_ID,
@@ -180,16 +186,18 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer()).get('/tasks/1').expect(200).expect({
       id: 1,
       title: 'Новое название',
+      version: 4,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
     });
   });
 
-  it('keeps a task unchanged for an empty update', async () => {
+  it('advances the version even for a version-only update', async () => {
     const task = {
       id: 1,
       title: 'Без изменений',
+      version: 2,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -202,7 +210,7 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch('/tasks/1')
-      .send({})
+      .send({ version: 1 })
       .expect(200)
       .expect(task);
   });
@@ -210,7 +218,7 @@ describe('AppController (e2e)', () => {
   it('returns 404 when updating a missing task', () => {
     return request(app.getHttpServer())
       .patch('/tasks/999')
-      .send({ completed: true })
+      .send({ completed: true, version: 1 })
       .expect(404);
   });
 
@@ -230,6 +238,7 @@ describe('AppController (e2e)', () => {
     const remainingTask = {
       id: 2,
       title: 'Оставить',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -302,6 +311,7 @@ describe('AppController (e2e)', () => {
     const task = {
       id: 1,
       title: 'Без изменений',
+      version: 1,
       completed: false,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
@@ -312,7 +322,10 @@ describe('AppController (e2e)', () => {
       .send({ title: task.title })
       .expect(201);
 
-    await request(app.getHttpServer()).patch('/tasks/1').send(body).expect(400);
+    await request(app.getHttpServer())
+      .patch('/tasks/1')
+      .send({ version: 1, ...body })
+      .expect(400);
 
     await request(app.getHttpServer()).get('/tasks/1').expect(200).expect(task);
   });
@@ -336,7 +349,7 @@ describe('AppController (e2e)', () => {
       { id: 2, title: 'Вторая', completed: true, assigneeId: 1 },
       { id: 3, title: 'Третья', completed: false, assigneeId: 2 },
       { id: 4, title: 'Без исполнителя', completed: false, assigneeId: null },
-    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID }));
+    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID, version: 1 }));
 
     await database.prisma.task.createMany({ data: tasks });
 
@@ -406,7 +419,7 @@ describe('AppController (e2e)', () => {
       { id: 3, title: 'Третья', completed: false, assigneeId: 1 },
       { id: 4, title: 'Четвёртая', completed: false, assigneeId: null },
       { id: 5, title: 'Пятая', completed: true, assigneeId: null },
-    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID }));
+    ].map((task) => ({ ...task, ownerId: TEST_OWNER_ID, version: 1 }));
     await database.prisma.task.createMany({ data: tasks });
 
     await request(app.getHttpServer())
@@ -434,6 +447,7 @@ describe('AppController (e2e)', () => {
       id: index + 1,
       title: `Задача ${index + 1}`,
       completed: false,
+      version: 1,
       assigneeId: null,
       ownerId: TEST_OWNER_ID,
     }));

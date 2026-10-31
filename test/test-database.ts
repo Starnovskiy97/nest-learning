@@ -66,10 +66,11 @@ export async function createTestDatabase() {
   }
 
   return {
+    schema,
     prisma,
     async reset(): Promise<void> {
       await pool.query(
-        `TRUNCATE TABLE "${schema}"."Task", "${schema}"."User" RESTART IDENTITY`,
+        `TRUNCATE TABLE "${schema}"."TaskCreationRequest", "${schema}"."Task", "${schema}"."User" RESTART IDENTITY`,
       );
     },
     close,

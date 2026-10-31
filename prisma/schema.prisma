@@ -9,18 +9,21 @@ datasource db {
 }
 
 model User {
-  id           Int     @id @default(autoincrement())
-  name         String
-  email        String? @unique
-  passwordHash String?
-  tasks        Task[]  @relation("TaskAssignee")
-  ownedTasks   Task[]  @relation("TaskOwner")
+  id                   Int                   @id @default(autoincrement())
+  name                 String
+  email                String?               @unique
+  passwordHash         String?
+  taskCacheGeneration  BigInt                @default(1)
+  tasks                Task[]                @relation("TaskAssignee")
+  ownedTasks           Task[]                @relation("TaskOwner")
+  taskCreationRequests TaskCreationRequest[]
 }
 
 model Task {
   id         Int     @id @default(autoincrement())
   title      String
   completed  Boolean @default(false)
+  version    Int     @default(1)
   assigneeId Int?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
   ownerId    Int?
@@ -28,4 +31,15 @@ model Task {
 
   @@index([assigneeId])
   @@index([ownerId, id])
+}
+
+// Snapshot of a successful POST /tasks, intentionally independent of Task lifetime.
+model TaskCreationRequest {
+  ownerId Int
+  key     String @db.Uuid
+  title   String
+  taskId  Int
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@id([ownerId, key])
 }

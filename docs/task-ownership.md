@@ -27,11 +27,13 @@ http POST :3000/tasks \
 
 http GET :3000/tasks "Authorization:Bearer <JWT>" page==1 limit==10
 http GET :3000/tasks/1 "Authorization:Bearer <JWT>"
-http PATCH :3000/tasks/1 "Authorization:Bearer <JWT>" completed:=true
+http PATCH :3000/tasks/1 "Authorization:Bearer <JWT>" completed:=true version:=1
 http DELETE :3000/tasks/1 "Authorization:Bearer <JWT>"
 ```
 
 Использовать фактический ID из ответа создания, не обязательно 1.
+В PATCH передавать фактическую `version` прочитанной задачи; после обновления
+она увеличивается. Устаревшая версия даёт 409. Подробнее: [task-concurrency.md](task-concurrency.md).
 Токен другого пользователя не даст прочитать, изменить или удалить эту задачу.
 
 ## Архитектура

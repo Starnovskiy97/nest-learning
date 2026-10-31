@@ -80,6 +80,7 @@ describe('Task ownership (e2e)', () => {
       .expect({
         id: 1,
         title: 'Моя задача',
+        version: 1,
         completed: false,
         assigneeId: null,
         ownerId: 1,
@@ -123,7 +124,7 @@ describe('Task ownership (e2e)', () => {
         assigneeId: 2,
         completed: false,
       },
-    ];
+    ].map((task) => ({ ...task, version: 1 }));
     await database.prisma.task.createMany({ data: tasks });
 
     await request(app.getHttpServer())
@@ -163,7 +164,7 @@ describe('Task ownership (e2e)', () => {
         [method](`/tasks/${task.id}`)
         .set('Authorization', `Bearer ${otherToken}`);
       if (method === 'patch')
-        req.send({ title: 'Не сохранять', assigneeId: 1 });
+        req.send({ title: 'Не сохранять', assigneeId: 1, version: 1 });
 
       await req.expect(404).expect({
         message: `Task with id ${task.id} not found`,
@@ -191,7 +192,7 @@ describe('Task ownership (e2e)', () => {
       const req = request(app.getHttpServer())
         [method](`/tasks/${task.id}`)
         .set('Authorization', `Bearer ${ownerToken}`);
-      if (method === 'patch') req.send({ title: 'Не сохранять' });
+      if (method === 'patch') req.send({ title: 'Не сохранять', version: 1 });
       await req.expect(404);
     }
 
@@ -219,7 +220,7 @@ describe('Task ownership (e2e)', () => {
     await request(app.getHttpServer())
       .patch(`/tasks/${task.id}`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ ownerId: 2 })
+      .send({ ownerId: 2, version: 1 })
       .expect(400);
     await request(app.getHttpServer())
       .get('/tasks')

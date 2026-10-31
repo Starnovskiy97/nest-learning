@@ -8,6 +8,27 @@
 
 Доступ к задачам только автору: [docs/task-ownership.md](docs/task-ownership.md).
 
+Практика по индексам и планам запросов: [docs/indexes-lab.md](docs/indexes-lab.md)
+(`pnpm db:lab:indexes`).
+
+Nginx и ограничение запросов: [docs/nginx-rate-limiting.md](docs/nginx-rate-limiting.md)
+(`pnpm proxy:up`, `pnpm test:proxy`).
+
+Защита создания задач от повторов: [docs/task-idempotency.md](docs/task-idempotency.md).
+
+Конкурентное редактирование задач: [docs/task-concurrency.md](docs/task-concurrency.md).
+
+Два экземпляра API за Nginx: [docs/load-balancing.md](docs/load-balancing.md)
+(`pnpm proxy:balanced:up`, `pnpm test:balancing`).
+
+Сравнение под нагрузкой: [docs/load-testing.md](docs/load-testing.md)
+(`pnpm lab:load --quick`, `pnpm lab:load`).
+
+Redis-кэш списка задач: [docs/task-cache.md](docs/task-cache.md)
+(`pnpm cache:up`, `pnpm test:cache`).
+
+Инвалидация кэша и защита от поздних чтений: [docs/cache-invalidation.md](docs/cache-invalidation.md).
+
 ```bash
 pnpm install
 pnpm start:dev
